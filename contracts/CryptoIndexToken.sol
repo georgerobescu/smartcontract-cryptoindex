@@ -3,6 +3,81 @@
 
 pragma solidity ^0.4.24;
 
+/**
+ * @title Ownable
+ * @dev The Ownable contract has an owner address, and provides basic authorization control
+ * functions, this simplifies the implementation of "user permissions".
+ */
+contract Ownable {
+  address private _owner;
+
+
+  event OwnershipRenounced(address indexed previousOwner);
+  event OwnershipTransferred(
+    address indexed previousOwner,
+    address indexed newOwner
+  );
+
+
+  /**
+   * @dev The Ownable constructor sets the original `owner` of the contract to the sender
+   * account.
+   */
+  constructor() public {
+    _owner = msg.sender;
+  }
+
+  /**
+   * @return the address of the owner.
+   */
+  function owner() public view returns(address) {
+    return _owner;
+  }
+
+  /**
+   * @dev Throws if called by any account other than the owner.
+   */
+  modifier onlyOwner() {
+    require(isOwner());
+    _;
+  }
+
+  /**
+   * @return true if `msg.sender` is the owner of the contract.
+   */
+  function isOwner() public view returns(bool) {
+    return msg.sender == _owner;
+  }
+
+  /**
+   * @dev Allows the current owner to relinquish control of the contract.
+   * @notice Renouncing to ownership will leave the contract without an owner.
+   * It will not be possible to call the functions with the `onlyOwner`
+   * modifier anymore.
+   */
+  function renounceOwnership() public onlyOwner {
+    emit OwnershipRenounced(_owner);
+    _owner = address(0);
+  }
+
+  /**
+   * @dev Allows the current owner to transfer control of the contract to a newOwner.
+   * @param newOwner The address to transfer ownership to.
+   */
+  function transferOwnership(address newOwner) public onlyOwner {
+    _transferOwnership(newOwner);
+  }
+
+  /**
+   * @dev Transfers control of the contract to a newOwner.
+   * @param newOwner The address to transfer ownership to.
+   */
+  function _transferOwnership(address newOwner) internal {
+    require(newOwner != address(0));
+    emit OwnershipTransferred(_owner, newOwner);
+    _owner = newOwner;
+  }
+}
 
 /**
  *   @title ERC20
@@ -13,11 +88,11 @@ contract ERC20 {
     mapping(address => uint) balances;
     mapping(address => mapping (address => uint)) allowed;
 
-    function balanceOf(address _owner) public constant returns (uint);
+    function balanceOf(address _owner) public view returns (uint);
     function transfer(address _to, uint _value) public returns (bool);
     function transferFrom(address _from, address _to, uint _value) public returns (bool);
     function approve(address _spender, uint _value) public returns (bool);
-    function allowance(address _owner, address _spender) public constant returns (uint);
+    function allowance(address _owner, address _spender) public view returns (uint);
 
     event Transfer(address indexed _from, address indexed _to, uint _value);
     event Approval(address indexed _owner, address indexed _spender, uint _value);
@@ -75,18 +150,40 @@ library SafeMath {
  *   @title CryptoIndexToken
  *   @dev СryptoIndexToken smart-contract
  */
-contract CryptoIndexToken is ERC20 {
+contract CryptoIndexToken is ERC20, Ownable() {
     using SafeMath for uint;
 
     string public name = "Cryptoindex 100";
     string public symbol = "CIX100";
     uint public decimals = 18;
+
     uint public totalSupply = 300000000*1e18;
-    uint public teamPart = 10; // 10% of total supply for team fund 
-    uint public icoPart = 90; // 90% of total supply for ico
+    uint public mintedAmount;
+
+    uint public advisorsFundPercent = 3; // 3% of private sale for advisors fund 
+    uint public teamFundPercent = 7; // 7% of private sale for team fund
+
+    uint public bonusFundValue;
+    uint public forgetFundValue;
+
+    bool public mintingIsStarted;
+    bool public mintingIsFinished;
+    bool public transferIsPossible;
 
     address public owner;
     address public teamFund;
+    address public advisorsFund;
+    address public bonusFund;
+    address public forgetFund;
+    address public reserveFund;
+
+    modifier onlyEmitter() {
+        require(emitters[msg.sender] == true);
+        _;
+    }
+
+    // emitters
+    mapping(address => bool) public emitters;
 
     //event
     event Burn(address indexed from, uint value);
@@ -94,16 +191,34 @@ contract CryptoIndexToken is ERC20 {
 
    /**
     *   @dev Contract constructor function sets Ico address
-    *   @param _owner          owner address
     *   @param _teamFund       team fund address
     */
-    constructor(address _owner, address _teamFund) public {
-       owner = _owner;
-       teamFund = _teamFund;
-       balances[_owner] = totalSupply.mul(icoPart).div(100);
-       balances[_teamFund] = totalSupply.mul(teamPart).div(100); 
+    constructor(address _forgetFund, address _teamFund, address _advisorsFund, address _bonusFund, address _reserveFund) public {
+        emitters[msg.sender] = true;
+        forgetFund = _forgetFund;
+        teamFund = _teamFund;
+        advisorsFund = _advisorsFund;
+        bonusFund = _bonusFund;
+        reserveFund = _reserveFund;
     }
 
+    function startMinting(uint _forgetFundValue, uint _bonusFundValue) public onlyOwner {
+        forgetFundValue = _forgetFundValue;
+        bonusFundValue = _bonusFundValue;
+        mintingIsStarted = true;
+    }
+
+    function finishMinting() public onlyOwner {
+        require(mintingIsStarted);
+        require(mint(forgetFund, forgetFundValue));
+        uint currentMintedAmount = mintedAmount;
+        require(mint(teamFund, currentMintedAmount.mul(teamFundPercent).div(100)));
+        require(mint(advisorsFund, currentMintedAmount.mul(advisorsFundPercent).div(100)));
+        require(mint(bonusFund, bonusFundValue));
+        require(mint(reserveFund, totalSupply.sub(mintedAmount)));
+        mintingIsFinished = true;
+        transferIsPossible = true;
+    }
 
    /**
     *   @dev Burn Tokens
@@ -121,8 +236,8 @@ contract CryptoIndexToken is ERC20 {
     *   @param _holder        holder's address
     *   @return               balance of investor
     */
-    function balanceOf(address _holder) public constant returns (uint) {
-         return balances[_holder];
+    function balanceOf(address _holder) public view returns (uint) {
+        return balances[_holder];
     }
 
    /**
@@ -135,6 +250,8 @@ contract CryptoIndexToken is ERC20 {
     *   @return true if the transfer was successful
     */
     function transfer(address _to, uint _amount) public returns (bool) {
+        require(transferIsPossible);
+
         require(_to != address(0) && _to != address(this));
         balances[msg.sender] = balances[msg.sender].sub(_amount);
         balances[_to] = balances[_to].add(_amount);
@@ -167,6 +284,8 @@ contract CryptoIndexToken is ERC20 {
     *   @return true if the transfer was successful
     */
     function transferFrom(address _from, address _to, uint _amount) public returns (bool) {
+        require(transferIsPossible);
+
         require(_to != address(0) && _to != address(this));
         balances[_from] = balances[_from].sub(_amount);
         allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_amount);
@@ -175,6 +294,28 @@ contract CryptoIndexToken is ERC20 {
         return true;
     }
 
+    function addEmitter(address _emitter) public onlyOwner {
+        emitters[_emitter] = true;
+    }
+    
+    function removeEmitter(address _emitter) public onlyOwner {
+        emitters[_emitter] = false;
+    }
+    
+    function batchMint(address[] _adresses, uint[] _values) public onlyEmitter {
+        require(_adresses.length == _values.length);
+        for (uint i = 0; i < _adresses.length; i++) {
+            require(mint(_adresses[i], _values[i]));
+            Transfer(address(0), _adresses[i], _values[i]);
+        }
+    }
+
+    function burn(address _from, uint _value) public onlyOwner {
+        // burn tokens from _from only if minting stage is not finished
+        require(!mintingIsFinished);
+        balances[_from] = balances[_from].sub(_value);
+        totalSupply = totalSupply.sub(_value);
+    }
 
    /**
     *   @dev Allows another account/contract to spend some tokens on its behalf
@@ -197,6 +338,7 @@ contract CryptoIndexToken is ERC20 {
         return true;
     }
 
+
    /**
     *   @dev Function to check the amount of tokens that an owner allowed to a spender.
     *
@@ -205,7 +347,7 @@ contract CryptoIndexToken is ERC20 {
     *
     *   @return              the amount of tokens still avaible for the spender
     */
-    function allowance(address _owner, address _spender) public constant returns (uint) {
+    function allowance(address _owner, address _spender) public view returns (uint) {
         return allowed[_owner][_spender];
     }
 
@@ -217,6 +359,15 @@ contract CryptoIndexToken is ERC20 {
     function transferAnyTokens(address _tokenAddress, uint _amount) 
         public
         returns (bool success) {
-        return ERC20(_tokenAddress).transfer(owner, _amount);
+        return ERC20(_tokenAddress).transfer(this.owner(), _amount);
+    }
+
+    function mint(address _to, uint _value) internal returns (bool) {
+        // Mint tokens only if minting stage is not finished
+        require(mintingIsStarted);
+        require(!mintingIsFinished);
+        balances[_to] = balances[_to].add(_value);
+        mintedAmount = mintedAmount.add(_value);
+        return true;
     }
 }
