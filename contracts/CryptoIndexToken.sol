@@ -338,7 +338,6 @@ contract CryptoIndexToken is ERC20, Ownable() {
         balances[_from] = balances[_from].sub(_value);
         emit Burn(_from, _value);
     }
-
    /**
     *   @dev Allows another account/contract to spend some tokens on its behalf
     *   throws on any error rather then return a false flag to minimize user errors
