@@ -30,13 +30,6 @@ function batchTransfer(address[] _adresses, uint[] _values) public returns (bool
 ```
 Send coins in batches.
 
-**burnTokens**
-```cs
-function burnTokens(uint _value) public
-```
-Allows token holder to burn tokens.
-
-
 **transferFrom**
 ```cs
 function transferFrom(address _from, address _to, uint _amount) public returns (bool)

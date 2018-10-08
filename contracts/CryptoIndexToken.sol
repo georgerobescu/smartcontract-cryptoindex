@@ -185,8 +185,8 @@ contract CryptoIndexToken is ERC20, Ownable() {
 
     //event
     event Burn(address indexed from, uint value);
-    event MintingStarted();
-    event MintingFinished();
+    event MintingStarted(uint timestamp);
+    event MintingFinished(uint timestamp);
     
 
    /**
@@ -211,14 +211,14 @@ contract CryptoIndexToken is ERC20, Ownable() {
         forgetFundValue = _forgetFundValue;
         bonusFundValue = _bonusFundValue;
         mintingIsStarted = true;
-        emit MintingStarted();
+        emit MintingStarted(now);
     }
 
    /**
     *   @dev Finish minting
     */
     function finishMinting() public onlyOwner {
-        require(mintingIsStarted);
+        require(!mintingIsFinished);
         require(mint(forgetFund, forgetFundValue));
         uint currentMintedAmount = mintedAmount;
         require(mint(teamFund, currentMintedAmount.mul(teamFundPercent).div(100)));
@@ -226,18 +226,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
         require(mint(bonusFund, bonusFundValue));
         require(mint(reserveFund, totalSupply.sub(mintedAmount)));
         mintingIsFinished = true;
-        emit MintingFinished();
-    }
-
-   /**
-    *   @dev Burn Tokens
-    *   @param _value        number of tokens to burn from sender's balance
-    */
-    function burnTokens(uint _value) public {
-        require(balances[msg.sender] > 0);
-        totalSupply = totalSupply.sub(_value);
-        balances[msg.sender] = balances[msg.sender].sub(_value);
-        emit Burn(msg.sender, _value);
+        emit MintingFinished(now);
     }
 
    /**
@@ -260,7 +249,6 @@ contract CryptoIndexToken is ERC20, Ownable() {
     */
     function transfer(address _to, uint _amount) public returns (bool) {
         require(mintingIsFinished);
-
         require(_to != address(0) && _to != address(this));
         balances[msg.sender] = balances[msg.sender].sub(_amount);
         balances[_to] = balances[_to].add(_amount);
@@ -336,11 +324,19 @@ contract CryptoIndexToken is ERC20, Ownable() {
         }
     }
 
-    function burn(address _from, uint _value) public onlyOwner {
-        // burn tokens from _from only if minting stage is not finished
-        require(!mintingIsFinished);
+    function burn(address _from, uint _value) public {
+        if (msg.sender != _from) {
+          require(!mintingIsFinished);
+          // burn tokens from _from only if minting stage is not finished
+          // allows owner to correct initial balance before finishing minting
+          require(msg.sender == this.owner());
+          mintedAmount = mintedAmount.sub(_value);          
+        } else {
+          require(mintingIsFinished);
+          totalSupply = totalSupply.sub(_value);
+        }
         balances[_from] = balances[_from].sub(_value);
-        totalSupply = totalSupply.sub(_value);
+        emit Burn(_from, _value);
     }
 
    /**

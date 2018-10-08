@@ -1,4 +1,3 @@
-const BigNumber = require('bignumber.js');
 const Token = artifacts.require('CryptoIndexToken');
 
 async function assertRevert(promise) {
@@ -12,7 +11,7 @@ async function assertRevert(promise) {
     }
 }
 
-contract('Token', function ([
+contract('CryptoIndexToken', function ([
     _,
     owner,
     forgetFund,
