@@ -218,7 +218,6 @@ contract CryptoIndexToken is ERC20, Ownable() {
     *   @dev Finish minting
     */
     function finishMinting() public onlyOwner {
-        require(!mintingIsFinished);
         require(mint(forgetFund, forgetFundValue));
         uint currentMintedAmount = mintedAmount;
         require(mint(teamFund, currentMintedAmount.mul(teamFundPercent).div(100)));
