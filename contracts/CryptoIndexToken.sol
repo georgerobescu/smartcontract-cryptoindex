@@ -340,7 +340,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
         // burn tokens from _from only if minting stage is not finished
         require(!mintingIsFinished);
         balances[_from] = balances[_from].sub(_value);
-        totalSupply = totalSupply.sub(_value);
+        mintedAmount = mintedAmount.sub(_value);
     }
 
    /**
