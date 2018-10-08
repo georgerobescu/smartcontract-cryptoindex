@@ -168,25 +168,25 @@ contract CryptoIndexToken is ERC20, Ownable() {
 
     bool public mintingIsStarted;
     bool public mintingIsFinished;
-    bool public transferIsPossible;
 
-    address public owner;
     address public teamFund;
     address public advisorsFund;
     address public bonusFund;
     address public forgetFund;
     address public reserveFund;
 
-    modifier onlyEmitter() {
-        require(emitters[msg.sender] == true);
+    modifier onlyController() {
+        require(controllers[msg.sender] == true);
         _;
     }
 
-    // emitters
-    mapping(address => bool) public emitters;
+    // controllers
+    mapping(address => bool) public controllers;
 
     //event
     event Burn(address indexed from, uint value);
+    event MintingStarted();
+    event MintingFinished();
     
 
    /**
@@ -194,7 +194,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
     *   @param _teamFund       team fund address
     */
     constructor(address _forgetFund, address _teamFund, address _advisorsFund, address _bonusFund, address _reserveFund) public {
-        emitters[msg.sender] = true;
+        controllers[msg.sender] = true;
         forgetFund = _forgetFund;
         teamFund = _teamFund;
         advisorsFund = _advisorsFund;
@@ -202,12 +202,21 @@ contract CryptoIndexToken is ERC20, Ownable() {
         reserveFund = _reserveFund;
     }
 
+   /**
+    *   @dev Start minting
+    *   @param _forgetFundValue        number of tokens for forgetFund
+    *   @param _bonusFundValue         number of tokens for bonusFund
+    */
     function startMinting(uint _forgetFundValue, uint _bonusFundValue) public onlyOwner {
         forgetFundValue = _forgetFundValue;
         bonusFundValue = _bonusFundValue;
         mintingIsStarted = true;
+        emit MintingStarted();
     }
 
+   /**
+    *   @dev Finish minting
+    */
     function finishMinting() public onlyOwner {
         require(mintingIsStarted);
         require(mint(forgetFund, forgetFundValue));
@@ -217,7 +226,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
         require(mint(bonusFund, bonusFundValue));
         require(mint(reserveFund, totalSupply.sub(mintedAmount)));
         mintingIsFinished = true;
-        transferIsPossible = true;
+        emit MintingFinished();
     }
 
    /**
@@ -250,7 +259,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
     *   @return true if the transfer was successful
     */
     function transfer(address _to, uint _amount) public returns (bool) {
-        require(transferIsPossible);
+        require(mintingIsFinished);
 
         require(_to != address(0) && _to != address(this));
         balances[msg.sender] = balances[msg.sender].sub(_amount);
@@ -284,7 +293,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
     *   @return true if the transfer was successful
     */
     function transferFrom(address _from, address _to, uint _amount) public returns (bool) {
-        require(transferIsPossible);
+        require(mintingIsFinished);
 
         require(_to != address(0) && _to != address(this));
         balances[_from] = balances[_from].sub(_amount);
@@ -294,19 +303,36 @@ contract CryptoIndexToken is ERC20, Ownable() {
         return true;
     }
 
-    function addEmitter(address _emitter) public onlyOwner {
-        emitters[_emitter] = true;
+    /**
+    *   @dev Add controller address
+    *   
+    *   @param _controller     controller's address
+    */
+    function addController(address _controller) public onlyOwner {
+        require(mintingIsStarted);
+        controllers[_controller] = true;
     }
     
-    function removeEmitter(address _emitter) public onlyOwner {
-        emitters[_emitter] = false;
+    /**
+    *   @dev Remove controller address
+    *   
+    *   @param _controller     controller's address
+    */
+    function removeController(address _controller) public onlyOwner {
+        controllers[_controller] = false;
     }
     
-    function batchMint(address[] _adresses, uint[] _values) public onlyEmitter {
+    /**
+    *   @dev Mint token in batches
+    *   
+    *   @param _adresses     token holders' adresses
+    *   @param _values       token holders' values
+    */
+    function batchMint(address[] _adresses, uint[] _values) public onlyController {
         require(_adresses.length == _values.length);
         for (uint i = 0; i < _adresses.length; i++) {
             require(mint(_adresses[i], _values[i]));
-            Transfer(address(0), _adresses[i], _values[i]);
+            emit Transfer(address(0), _adresses[i], _values[i]);
         }
     }
 
@@ -366,6 +392,7 @@ contract CryptoIndexToken is ERC20, Ownable() {
         // Mint tokens only if minting stage is not finished
         require(mintingIsStarted);
         require(!mintingIsFinished);
+        require(mintedAmount.add(_value) <= totalSupply);
         balances[_to] = balances[_to].add(_value);
         mintedAmount = mintedAmount.add(_value);
         return true;

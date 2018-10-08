@@ -70,7 +70,11 @@ contract('Token', function ([
                         const balance = await this.token.balanceOf(recepients[i]);
                         assert.equal(balances[i], balance);
                     }
-                })
+                });
+
+                it('should not allow to mint more than totalSupply', async function() {
+                    assertRevert(this.token.batchMint([recipient], [TOTAL_SUPPLY + 1]));
+                });
             });
 
             describe('when minting is finished', function() {
@@ -82,17 +86,18 @@ contract('Token', function ([
         });
 
 
-        describe('from emitters', function() {
+        describe('from controllers', function() {
             beforeEach(async function() {
-                await this.token.addEmitter(anotherAccount, {from: owner});
+                await this.token.startMinting(forgetFundAmount, bonusFundAmount, { from: owner });
+                await this.token.addController(anotherAccount, {from: owner});
             });
 
-            it('should allow to add an emitter', async function() {
-                const isEmitter = await this.token.emitters(anotherAccount);
-                assert.equal(isEmitter, true);
+            it('should allow to add an controller', async function() {
+                const isController = await this.token.controllers(anotherAccount);
+                assert.equal(isController, true);
             });
 
-            it('should be able to mint from emitter', async function() {
+            it('should be able to mint from controller', async function() {
                 await this.token.startMinting(forgetFundAmount, bonusFundAmount, { from: owner });
                 await this.token.batchMint([owner], [100], {from: anotherAccount});
                 const balance = await this.token.balanceOf(owner);
